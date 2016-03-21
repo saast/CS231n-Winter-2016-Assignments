@@ -56,6 +56,8 @@ def affine_backward(dout, cache):
 
     N = x.shape[0]
 
+#    print dout.shape, w.T.shape, x.shape
+
     dx = dout.dot(w.T).reshape(x.shape)
     dw = x.reshape(N, -1).T.dot(dout)
     db = np.sum(dout, axis=0)

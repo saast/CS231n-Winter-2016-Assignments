@@ -181,8 +181,11 @@ class FullyConnectedNet(object):
         self.dtype = dtype
         self.params = {}
 
-        print 'hidden_dims', hidden_dims
-        print 'hidden_dims.len', len(hidden_dims)
+#        print 'hidden_dims', hidden_dims
+#        print 'hidden_dims.len', len(hidden_dims)
+        L = len(hidden_dims) + 1
+#        print 'L', L
+#        print 'input_dim', input_dim
 
         #######################################################################
         # TODO: Initialize the parameters of the network, storing all values  #
@@ -197,13 +200,25 @@ class FullyConnectedNet(object):
         # and beta2, etc. Scale parameters should be initialized to one and   #
         # shift parameters should be initialized to zero.                     #
         #######################################################################
+
         last_layer_output_dim = input_dim
         for i, value in enumerate(hidden_dims):
             self.params['W' + str(i + 1)] = np.random.normal(
                 scale=weight_scale,
                 size=(last_layer_output_dim, hidden_dims[i]))
             self.params['b' + str(i + 1)] = np.zeros(hidden_dims[i])
+
+#            print 'W', str(i + 1), self.params['W' + str(i + 1)].shape
+#            print 'b', str(i + 1), self.params['b' + str(i + 1)].shape
+
             last_layer_output_dim = hidden_dims[i]
+
+        self.params['W' + str(L)] = np.random.normal(
+            scale=weight_scale,
+            size=(last_layer_output_dim, num_classes))
+        self.params['b' + str(L)] = np.zeros(num_classes)
+#        print 'W', str(L), self.params['W' + str(L)].shape
+#        print 'b', str(L), self.params['b' + str(L)].shape
 
         #######################################################################
         #                             END OF YOUR CODE                        #
@@ -265,16 +280,27 @@ class FullyConnectedNet(object):
         # the second batch normalization layer, etc.                          #
         #######################################################################
 
+        cache_afs = []
+        cache_relus = []
+
+        out = X
+
         for i in xrange(len(self.params)/2 - 1):
-            out, cache_af_1 = affine_forward(X, self.params['W' + str(i + 1)],
-                                             self.params['b' + str(i + 1)])
+            out, cache = affine_forward(out, self.params['W' + str(i + 1)],
+                                        self.params['b' + str(i + 1)])
+#            print 'W' + str(i + 1)
+#            print out.shape
+            cache_afs.append(cache)
+
             out, cache_relu = relu_forward(out)
+            cache_relus.append(cache_relu)
 
         last_layer_i = len(self.params)/2
 
-        out, cache_af_2 = affine_forward(out,
-                                         self.params['W' + str(last_layer_i)],
-                                         self.params['b' + str(last_layer_i)])
+        out, cache = affine_forward(out,
+                                    self.params['W' + str(last_layer_i)],
+                                    self.params['b' + str(last_layer_i)])
+        cache_afs.append(cache)
         scores = out
         #######################################################################
         #                             END OF YOUR CODE                        #
@@ -300,17 +326,19 @@ class FullyConnectedNet(object):
         #######################################################################
         loss, dx = softmax_loss(scores, y)
 
-        dx, grads['W2'], grads['b2'] = affine_backward(dx, cache_af_2)
-        grads['W2'] += self.reg * self.params['W2']
+        layers = len(cache_afs) - 1
 
-        dx = relu_backward(dx, cache_relu)
+        dx, grads['W' + str(layers + 1)], grads['b' + str(layers + 1)] = affine_backward(dx, cache_afs[layers])
+        grads['W' + str(layers + 1)] += self.reg * self.params['W' + str(layers + 1)]
+        loss += 0.5 * self.reg * np.sum(self.params['W' + str(layers + 1)] * self.params['W' + str(layers + 1)])
 
-        dx, grads['W1'], grads['b1'] = affine_backward(dx, cache_af_1)
-        grads['W1'] += self.reg * self.params['W1']
+        for i in xrange(layers - 1, -1, -1):
+            dx = relu_backward(dx, cache_relus[i])
 
-        loss += 0.5 * self.reg *\
-            (np.sum(self.params['W1'] * self.params['W1']) +
-                np.sum(self.params['W2'] * self.params['W2']))
+            dx, grads['W' + str(i + 1)], grads['b' + str(i + 1)] = affine_backward(dx, cache_afs[i])
+            grads['W' + str(i + 1)] += self.reg * self.params['W' + str(i + 1)]
+
+            loss += 0.5 * self.reg * np.sum(self.params['W' + str(i + 1)] * self.params['W' + str(i + 1)])
 
         #######################################################################
         #                             END OF YOUR CODE                        #
